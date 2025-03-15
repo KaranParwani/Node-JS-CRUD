@@ -2,11 +2,15 @@ const express = require("express");
 const swaggerUi = require("swagger-ui-express");
 const swaggerJsdoc = require("swagger-jsdoc");
 const redis = require("redis");
+const { json } = require("body-parser");
 
 const app = express();
 const port = 6500;
 
 app.use(express.json());
+const jwt = require("jsonwebtoken");
+
+const secret_key = "9038520395u82903850923";
 
 let users = []
 
@@ -39,6 +43,173 @@ const swaggerOptions = {
   const swaggerDocs = swaggerJsdoc(swaggerOptions);
   app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(swaggerDocs));
 
+/**
+ * @swagger
+ * /user_registration:
+ *   post:
+ *     summary: User Registration
+ *     description: Endpoint to register a new user.
+ *     tags: [Users]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               name:
+ *                 type: string
+ *                 example: John Doe
+ *                 description: User's full name.
+ *               email:
+ *                 type: string
+ *                 format: email
+ *                 example: example@example.com
+ *                 description: User's email address.
+ *               password:
+ *                 type: string
+ *                 format: password
+ *                 example: P@ssw0rd!
+ *                 description: User's password.
+ *     responses:
+ *       200:
+ *         description: User registration successful.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                   example: User registered successfully.
+ *       400:
+ *         description: Invalid input or missing parameters.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 error:
+ *                   type: string
+ *                   example: Name, email, and password are required.
+ */
+
+// Registration API
+app.post('/user_registration', async (request, response) => {
+        const { name, email, password } = request.body;
+        console.log(request.body);
+
+        if (!name || !email || !password) {
+            return response.status(404).json({message: "All fields are required"});
+        }
+
+        try {
+            email_exists = await redis_client.hExists("users", email);
+
+            if (email_exists) {
+                return response.status(404).json({message: "Email already exists"});
+            }
+            
+            const user = {name, email, password};
+            await redis_client.hSet("users", email, JSON.stringify(user));
+            return response.status(200).json({message: "User registered successfully"});
+
+        }   
+        catch (error) {
+            console.log("Error", error);
+            return response.status(500).json({message: `Some error occured : ${error}`});
+        }
+})
+
+/**
+ * @swagger
+ * /user_login:
+ *   post:
+ *     summary: User Login
+ *     description: Logs in a user using their email and password.
+ *     tags: [Users]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               email:
+ *                 type: string
+ *                 format: email
+ *                 example: user@example.com
+ *                 description: The user's email address.
+ *               password:
+ *                 type: string
+ *                 format: password
+ *                 example: password123
+ *                 description: The user's password.
+ *     responses:
+ *       200:
+ *         description: Login successful.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                   example: Logged in Successfully.
+ *       494:
+ *         description: Missing email or password in the request body.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                   example: Email ID and Password is required.
+ *       500:
+ *         description: Internal server error.
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                   example: "Some error occurred: <error message>."
+ */
+
+//login API 
+app.post('/user_login', async (request, response) => {
+    const {email, password} = request.body;
+    console.log(email, password);
+
+    if (!email, !password) {
+        return response.status(494).json({message: "Email ID and Password is required"});
+    }
+
+    try {
+        existing_user = await redis_client.hExists("users", email, password);
+        console.log(existing_user);
+
+        existing_creds = await redis_client.hGet("users", email);
+
+        if (existing_creds) {
+            existing_creds_json = JSON.parse(existing_creds);
+            console.log(existing_creds_json.password);
+        }
+
+        if (existing_user && password == existing_creds_json.password) {
+            const payload = { email };
+            const token = jwt.sign(payload, secret_key, {expiresIn : "1h"});
+            return response.status(200).json({message: "Logged in Successfully", "token": token});
+        }
+        response.status(200).json({message: "No email was found or password is incorrect"});
+    } 
+    catch (error) {
+        console.log("Error", error);
+        return response.status(500).json({message: `Some error occured : ${error}`});
+    }
+})
 
 /**
  * @swagger
